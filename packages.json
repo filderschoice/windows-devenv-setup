@@ -1,0 +1,14 @@
+[
+  { "Id": "Git.Git", "Name": "Git for Windows" },
+  { "Id": "OpenJS.NodeJS.LTS", "Name": "Node.js LTS" },
+  { "Id": "GitHub.cli", "Name": "GitHub CLI" },
+  { "Id": "Microsoft.WindowsTerminal", "Name": "Windows Terminal" },
+  { "Id": "Microsoft.PowerShell", "Name": "PowerShell 7" },
+  { "Id": "Microsoft.VisualStudioCode", "Name": "Visual Studio Code" },
+  { "Id": "XP89DCGQ3K6VLD", "Name": "Microsoft PowerToys" },
+  { "Id": "Python.PythonInstallManager", "Name": "Python Install Manager" },
+  { "Id": "Microsoft.WindowsApp", "Name": "Windows App" },
+  { "Id": "File-New-Project.EarTrumpet", "Name": "EarTrumpet" },
+  { "Id": "9PM860492SZD", "Name": "Microsoft PC Manager" },
+  { "Id": "FilesCommunity.Files", "Name": "Files" }
+]
