@@ -10,5 +10,8 @@
   { "Id": "Microsoft.WindowsApp", "Name": "Windows App" },
   { "Id": "File-New-Project.EarTrumpet", "Name": "EarTrumpet" },
   { "Id": "9PM860492SZD", "Name": "Microsoft PC Manager" },
-  { "Id": "FilesCommunity.Files", "Name": "Files" }
+  { "Id": "FilesCommunity.Files", "Name": "Files" },
+  { "Id": "Microsoft.DotNet.DesktopRuntime.10", "Name": ".NET Desktop Runtime 10" },
+  { "Id": "9P1HQ5TQZMGD", "Name": "Microsoft Loop" },
+  { "Id": "Microsoft.Edit", "Name": "Microsoft Edit" }
 ]
