@@ -47,7 +47,11 @@ powershell -ExecutionPolicy Bypass -File .\Install-DevEnvironment.ps1
 ## スクリプトを編集する際に維持すべき規約
 
 - 冪等性: インストール前に `Test-WingetPackageInstalled`(内部で `winget list --id <id> -e` を使用)
-  で確認し、Claude Code CLI のインストール前には `Get-Command claude` で確認する。
+  で確認し、Claude Code CLI のインストール前には `Get-Command claude` で確認する。導入済みの場合も
+  スキップするだけでなく、winget パッケージは `winget upgrade --id <id> -e`、Claude Code CLI は
+  `npm install -g @anthropic-ai/claude-code` を実行して最新版への更新を試みる(winget upgrade が
+  「利用可能なアップグレードなし」(exit code `-1978335189` / `0x8A15002B`)を返した場合は最新版として
+  スキップ扱いにする)。
 - 実行結果は `[PSCustomObject]`(`Name`, `Status`)の配列 `$results` に蓄積し、最後にサマリ表
   (`Format-Table -AutoSize`)として出力する — 新しいステップを追加する場合もこの報告パターンに揃える。
 - インストール後、`Update-SessionPath` が Machine + User の `Path` を現在のセッションにマージし、
