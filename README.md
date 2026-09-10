@@ -42,3 +42,25 @@ cd C:\Dev\windows-devenv-setup
 を配列に追加/削除するだけでよい。`winget search <キーワード>` でPackageIdentifierを調べられる。
 
 Claude Code CLI (npm パッケージ)はスクリプト内に直接記述されている。
+
+## アンインストール
+
+個別のwingetパッケージをアンインストールする場合:
+
+```powershell
+winget uninstall --id <wingetのPackageIdentifier> -e
+```
+
+`packages.json` に列挙されているパッケージを一括でアンインストールする場合:
+
+```powershell
+Get-Content .\packages.json -Raw | ConvertFrom-Json | ForEach-Object {
+    winget uninstall --id $_.Id -e
+}
+```
+
+Claude Code CLI (npm) をアンインストールする場合:
+
+```powershell
+npm uninstall -g @anthropic-ai/claude-code
+```

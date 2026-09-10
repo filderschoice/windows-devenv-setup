@@ -6,7 +6,10 @@
 
 Windowsの開発マシンを初期構築するためのブートストラップツール一式。決められたwingetパッケージ群と
 Claude Code CLI(npm経由)をインストールする。どちらも冪等であり、すでに導入済みのパッケージ/ツールは
-スキップされるため、スクリプトは何度実行しても安全。
+スキップ(または最新版へ更新)されるため、スクリプトは何度実行しても安全。
+
+ビルド・lint・テストの仕組みは存在しない — 素のPowerShellスクリプト2本と、それが読む `packages.json`
+だけで構成される。
 
 ## スクリプト
 
@@ -32,7 +35,24 @@ Claude Code CLI(npm経由)をインストールする。どちらも冪等であ
 powershell -ExecutionPolicy Bypass -File .\Install-DevEnvironment.ps1
 ```
 
-このリポジトリにビルド・lint・テストの仕組みは存在しない — 素のPowerShellを直接実行するだけ。
+## 2本のスクリプトはほぼ同一 — 編集は必ず両方に反映する
+
+`Install-DevEnvironment-User.ps1` は `Install-DevEnvironment.ps1` のコピーであり、意図的な差分は
+以下だけ。片方だけを直すと両者が静かに乖離するため、共通ロジック(関数・ループ・サマリ出力など)への
+変更は必ず2本ともに同じ形で適用し、編集後に差分を取って想定外の乖離が無いことを確認する。
+
+意図的な差分:
+1. 冒頭のコメントブロックの説明文
+2. 起動時の権限チェックの向き(`Test-IsElevated` 自体は両方にある。標準版は「管理者権限**でない**とき」に
+   マシンスコープ失敗の可能性を警告し、ユーザー版は「管理者権限**である**とき」に警告する)
+3. `winget install` / `winget upgrade` への `--scope user` の有無
+4. 失敗時のメッセージ(ユーザー版は「ユーザースコープ非対応の可能性 → 管理者版を使う」ヒントを付ける)
+5. ユーザー版の失敗時 `Status` に「管理者権限が必要な可能性あり」が付く
+
+差分確認の例:
+```powershell
+git diff --no-index .\Install-DevEnvironment.ps1 .\Install-DevEnvironment-User.ps1
+```
 
 ## パッケージの追加・削除
 
@@ -42,7 +62,42 @@ powershell -ExecutionPolicy Bypass -File .\Install-DevEnvironment.ps1
 { "Id": "<wingetのPackageIdentifier>", "Name": "<表示名>" }
 ```
 `Id` は `winget search <キーワード>` で調べられる。両スクリプトとも同じファイルを参照するため、
-編集はどちらのインストール経路にも反映される。
+編集はどちらのインストール経路にも反映される。`Name` は表示用なので日本語でも構わない
+(スクリプト側は `Get-Content -Encoding UTF8` で読むため、BOM無しUTF-8のままでも文字化けしない)。
+
+`Id` には winget コミュニティリポジトリの PackageIdentifier(`Git.Git` など)だけでなく、Microsoft Store の
+プロダクトID(`XP89DCGQ3K6VLD` = PowerToys, `9PGPPQ5ZDN2K` = Clibor など)もそのまま指定できる。
+`winget search` の `ソース` 列が `msstore` のものがそれにあたる。Store 経由のパッケージは
+`--scope user` を受け付けないことがあり、その場合ユーザー版では失敗して管理者版へのフォールバックが
+案内される。
+
+インストール後にPATHが正しく通っているか確認したいパッケージには、任意で `ExeName`
+(コマンド名、例: `"pwsh.exe"`)を追加する。指定すると `Sync-PackagePath` が `Get-Command` で解決可能かを
+確認し、解決できない場合はレジストリの `App Paths`(`HKLM`/`HKCU` の
+`SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\<ExeName>`)からインストール先を特定して
+ユーザーPATHに追記する(winget/MSIインストーラがPATHを更新しない場合の対策。実例: PowerShell 7 が
+MSIXパッケージとして入り、`%LOCALAPPDATA%\Microsoft\WindowsApps` のエイリアス経由でしか解決できず、
+かつそのフォルダがユーザーPATHに含まれていないケース)。
+
+## 変更の検証方法
+
+**スクリプトを「動作確認のために」実行しないこと。** 実行はこのマシンに対して実際にソフトウェアの
+インストール・更新・ユーザーPATHの書き換えを行う副作用を持つ。実行はユーザーが明示的に求めた場合に限る。
+
+副作用なしで確認できること:
+```powershell
+# packages.json が壊れていないか(件数が返れば妥当なJSON)
+(Get-Content .\packages.json -Raw | ConvertFrom-Json).Count
+
+# スクリプトを実行せずに構文だけ検証する
+$errs = $null
+[System.Management.Automation.Language.Parser]::ParseFile(
+    (Resolve-Path .\Install-DevEnvironment.ps1).Path, [ref]$null, [ref]$errs) > $null
+$errs
+
+# 追加しようとしているパッケージIDが実在するか(インストールはしない)
+winget show --id <PackageIdentifier> -e
+```
 
 ## スクリプトを編集する際に維持すべき規約
 
@@ -51,9 +106,37 @@ powershell -ExecutionPolicy Bypass -File .\Install-DevEnvironment.ps1
   スキップするだけでなく、winget パッケージは `winget upgrade --id <id> -e`、Claude Code CLI は
   `npm install -g @anthropic-ai/claude-code` を実行して最新版への更新を試みる(winget upgrade が
   「利用可能なアップグレードなし」(exit code `-1978335189` / `0x8A15002B`)を返した場合は最新版として
-  スキップ扱いにする)。
+  スキップ扱いにする)。Claude Code CLI が `Updated` か `Skip (最新版)` かは、npm 実行の前後で
+  `claude --version` を比較して判定している。
+- エラーハンドリング: 冒頭に `$ErrorActionPreference = 'Stop'` があるが、これは winget/npm のような
+  ネイティブコマンドの失敗には効かない。呼び出し直後に `$LASTEXITCODE` を判定し、失敗しても
+  **中断せず** `Write-Warning` と `$results` への記録を行って次のパッケージへ進む — 1つのパッケージの
+  失敗で環境構築全体が止まらないようにするため。新しいステップも同じ方針に揃える。
 - 実行結果は `[PSCustomObject]`(`Name`, `Status`)の配列 `$results` に蓄積し、最後にサマリ表
   (`Format-Table -AutoSize`)として出力する — 新しいステップを追加する場合もこの報告パターンに揃える。
+  `Sync-PackagePath` のように「何も報告することがない」場合は空配列 `@()` を返し、`$results +=` が
+  何も足さないようにする。
+- 終了コード: 個々のパッケージの失敗ではループを止めず、最後にサマリを出したうえで `Status` が
+  `Failed*` の項目が1件でもあれば `exit 1` する。失敗判定はこの前方一致に依存しているため、
+  新しい失敗ステータスを増やす場合も必ず `Failed` で始める文字列にすること。
 - インストール後、`Update-SessionPath` が Machine + User の `Path` を現在のセッションにマージし、
   新しく導入されたツール(例: winget でインストールした Node.js)をシェルを再起動せずに使えるようにする。
+  このマージは既存の `$env:Path` も保持する — セッション限定で足されたパス(`nvm use` 等)を消さないため。
+- ユーザーPATHへの追記(`Add-UserPathEntry`)は `HKCU:\Environment` を
+  `DoNotExpandEnvironmentNames` で読み、元の値種別(`REG_EXPAND_SZ`)のまま書き戻す。
+  `[Environment]::GetEnvironmentVariable('Path','User')` は `%NVM_HOME%` のような参照を展開した値を返し、
+  それを書き戻すと参照が実パスで焼き付いてしまうため、この API を PATH の読み書きに使ってはならない
+  (このリポジトリは NVM for Windows を導入するので実害が出る)。レジストリ直書きでは `WM_SETTINGCHANGE` が
+  飛ばないので、`Publish-EnvironmentChange` で明示的に通知する。
 - コンソール出力・コメントは日本語で書かれている。この2つのスクリプトを編集する際はそれに合わせる。
+- 文字コード: 改行は LF、**両スクリプトとも UTF-8 BOM付きで保存する**。READMEが案内する
+  `powershell -ExecutionPolicy Bypass -File ...` の `powershell` は Windows PowerShell 5.1 であり、
+  5.1 は BOM の無い UTF-8 を ANSI として読む。日本語文字列が文字化けして終端クォートまで壊れるため、
+  BOM を落とすと**スクリプトが構文エラーで起動しなくなる**(実測: BOMを外すと 5.1 のパーサで10件のエラー、
+  BOM付きなら0件)。エディタや自動整形でBOMが落ちていないか、編集後に必ず確認すること。
+
+## README との関係
+
+`README.md` はエンドユーザー向け(事前準備、実行方法、アンインストール手順)。パッケージ一覧は
+README には書かず `packages.json` を参照させる方針なので、パッケージを追加しても README の更新は不要。
+スクリプトの挙動やオプションを変えた場合のみ README を追随させる。
