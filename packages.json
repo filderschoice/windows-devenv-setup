@@ -19,6 +19,7 @@
   { "Id": "9PGPPQ5ZDN2K", "Name": "Clibor" },
   { "Id": "Microsoft.WindowsApp", "Name": "Windows App" },
   { "Id": "SlackTechnologies.Slack", "Name": "Slack" },
+  { "Id": "Anthropic.Claude", "Name": "Claude Desktop" },
   { "Id": "9P1HQ5TQZMGD", "Name": "Microsoft Loop" },
   { "Id": "Logitech.OptionsPlus", "Name": "Logi Options+" }
 ]
