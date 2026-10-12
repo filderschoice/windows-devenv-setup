@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## 2026-10-12 — `2aa9b7e`
+
 ### 変更
 
 - Python Install Manager のインストール元を winget コミュニティリポジトリ版
