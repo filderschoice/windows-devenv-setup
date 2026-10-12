@@ -8,6 +8,16 @@
 
 ## [Unreleased]
 
+### 変更
+
+- Python Install Manager のインストール元を winget コミュニティリポジトリ版
+  (`Python.PythonInstallManager`、python.org の MSIX 直取得)から Microsoft Store 版
+  (`9NQ7512CXL7T`)に変更。Store のライブラリに表示され、Store 経由で更新される。
+  ユーザー権限版では Store 版が `--scope user` を受け付けず失敗する可能性があり、その場合は管理者版を使う。
+  すでに winget 版が入っているマシンでは、Store 版が別途インストールされて二重になりうる。
+
+## 2026-10-07 — `770b5ac`
+
 ### 追加
 
 - インストール対象に Claude Desktop(`Anthropic.Claude`)を追加。

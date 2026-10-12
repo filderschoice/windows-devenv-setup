@@ -5,7 +5,7 @@
   { "Id": "Microsoft.PowerShell", "Name": "PowerShell 7", "ExeName": "pwsh.exe" },
   { "Id": "Microsoft.VisualStudioCode", "Name": "Visual Studio Code" },
   { "Id": "Microsoft.Edit", "Name": "Microsoft Edit" },
-  { "Id": "Python.PythonInstallManager", "Name": "Python Install Manager" },
+  { "Id": "9NQ7512CXL7T", "Name": "Python Install Manager" },
   { "Id": "CoreyButler.NVMforWindows", "Name": "NVM for Windows" },
   { "Id": "Microsoft.DotNet.DesktopRuntime.10", "Name": ".NET Desktop Runtime 10" },
   { "Id": "Microsoft.DotNet.SDK.8", "Name": ".NET SDK 8" },
