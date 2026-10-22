@@ -6,6 +6,10 @@
 一度 public にした内容は、後から private に戻したり履歴を書き換えたりしても、fork・クローン・
 キャッシュに残りうる。**「公開前に確認」の項目はすべて切り替え前に済ませること。**
 
+> **実施状況**: 2026-10-23 に public へ切り替え済み(公開時点の `main` は `5cbcd1c`)。2 の判断は
+> いずれも現状維持(MIT、`packages.json` はそのまま、メールアドレスは許容)とし、3〜5 はすべて実施・確認済み。
+> 以降のセクションは、同様の作業を再度行う場合の手順としても残している。
+
 ## 1. レビュー結果(2026-10-23)
 
 | 観点 | 結果 | 対応 |
@@ -34,6 +38,9 @@
 判断しているが、社内専用ツールや組織固有のパッケージを追加していないか切り替え直前に見直す。
 
 ### 2.3 コミットのメールアドレス
+
+`main` には Ruleset `protect-main` で force push 禁止をかけているため、公開後に履歴を書き換える場合は
+Ruleset を一時的に無効化する必要がある(公開後の書き換えは既存のクローン・fork からは消えない点にも注意)。
 
 履歴に残るアドレスを公開したくない場合は、**公開前に**次のどちらかを選ぶ。公開後に対処しても既存の
 クローンからは消えない。
@@ -66,7 +73,7 @@
   gh api -X PUT repos/filderschoice/windows-devenv-setup/actions/permissions -F enabled=false
   ```
 
-### 3.2 公開直後に設定する(private のままでは設定できない)
+### 3.2 公開直後に設定する(private のままでは設定できない) — 2026-10-23 実施済み
 
 GitHub Free プランでは、以下は private リポジトリで使えない(2026-10-23 に実行して確認済み:
 Secret scanning は `HTTP 422 Secret scanning is not available for this repository`、非公開の脆弱性報告は
@@ -88,7 +95,8 @@ gh api -X PUT "repos/$repo/private-vulnerability-reporting"
     gh api -X POST "repos/$repo/rulesets" --input -
 ```
 
-確認:
+確認(2026-10-23 実施時の結果: Secret scanning と Push protection が `enabled`、非公開の脆弱性報告が
+`{"enabled":true}`、Ruleset `protect-main` が `active`):
 
 ```powershell
 gh api "repos/$repo" --jq .security_and_analysis
@@ -115,11 +123,14 @@ gh api "repos/$repo/rulesets" --jq '.[].name'          # protect-main
 
 ## 5. 公開後の確認
 
-- [ ] ログアウト状態(またはシークレットウィンドウ)で README・LICENSE が表示されることを確認する。
-- [ ] **Insights → Community Standards** で README / LICENSE / Security policy が認識されていることを確認する。
-- [ ] 3.2 の確認コマンドで、Secret scanning・非公開の脆弱性報告・Ruleset が有効になっていることを確認する。
-- [ ] **Security** タブで Secret scanning のアラートが出ていないことを確認する。
-- [ ] README の `git clone` 手順どおりに取得できることを確認する(スクリプトは実行しなくてよい)。
+- [x] ログアウト状態(またはシークレットウィンドウ)で README・LICENSE が表示されることを確認する。
+  (認証なしで `raw.githubusercontent.com` から README・LICENSE・SECURITY.md が HTTP 200 で取得できることを確認)
+- [x] **Insights → Community Standards** で README / LICENSE / Security policy が認識されていることを確認する。
+  (LICENSE は `MIT` として認識。Security policy は GraphQL の `isSecurityPolicyEnabled` が `true`)
+- [x] 3.2 の確認コマンドで、Secret scanning・非公開の脆弱性報告・Ruleset が有効になっていることを確認する。
+- [x] **Security** タブで Secret scanning のアラートが出ていないことを確認する。(アラート 0 件)
+- [x] README の `git clone` 手順どおりに取得できることを確認する(スクリプトは実行しなくてよい)。
+  (認証なしで clone でき、`5cbcd1c` が取得されることを確認)
 
 ## 6. 公開後の運用で気をつけること
 
