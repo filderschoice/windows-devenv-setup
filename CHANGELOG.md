@@ -8,6 +8,20 @@
 
 ## [Unreleased]
 
+### 追加
+
+- `LICENSE`(MIT License)。公開に向けてライセンスを明示した。
+- `SECURITY.md`。脆弱性は公開 Issue ではなく GitHub の非公開報告で受け付ける。
+- README に「実行前の注意」を追加。ソフトウェアの導入とユーザーPATHの書き換えを行うこと、
+  `packages.json` は作者の環境向けなので必要に応じて編集すること、各パッケージの利用規約に自動で同意することを明記。
+- `docs/PUBLIC-RELEASE.md`。リポジトリを public にする際のレビュー結果と、公開前後に行う作業のチェックリスト。
+
+### 変更
+
+- README の実行手順を、作者のローカルパスへの `cd` から `git clone` で取得する手順に変更。ZIP で取得した場合の
+  ブロック解除(`Unblock-File`)も追記。
+- `.gitattributes` で改行を LF に固定し、`core.autocrlf=true` の環境で clone しても CRLF に変換されないようにした。
+
 ## 2026-10-12 — `2aa9b7e`
 
 ### 変更

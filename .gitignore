@@ -1,0 +1,2 @@
+# Claude Code の個人設定(許可リスト等)。共有用の .claude/settings.json はコミットしてよい。
+.claude/settings.local.json

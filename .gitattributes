@@ -1,0 +1,3 @@
+# 改行は LF に統一する(core.autocrlf=true の環境で clone しても CRLF に変換させない)。
+# スクリプトの UTF-8 BOM は Git が保持するため、ここでは扱わない(CLAUDE.md 参照)。
+* text=auto eol=lf
