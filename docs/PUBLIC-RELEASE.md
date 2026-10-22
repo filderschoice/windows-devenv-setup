@@ -49,21 +49,52 @@
 
 ## 3. GitHub リポジトリ設定
 
-公開前に設定しておくもの:
+### 3.1 公開前に設定済み(2026-10-23、gh で実施)
 
-- [ ] **About**(説明文・トピック)を設定する。例:
+- [x] **About**: 説明文とトピック(`windows` `winget` `powershell` `setup-script`)。
   ```powershell
   gh repo edit --description "winget と npm で Windows の開発環境を冪等に構築する PowerShell スクリプト" `
       --add-topic windows --add-topic winget --add-topic powershell --add-topic setup-script
   ```
-- [ ] **Settings → Security**(Code security)で以下を有効にする(public リポジトリでは無料):
-  - Secret scanning と Push protection(誤ってトークンを push するのを防ぐ)
-  - Private vulnerability reporting(`SECURITY.md` が案内する報告窓口。無効のままだと報告できない)
-- [ ] **Settings → General → Features**: 使わない機能(Projects など)を無効にする。Issues を受け付けない
-  方針なら Issues も無効にする。
-- [ ] **Settings → Actions → General**: 現状 Actions は使っていないため、「Disable actions」にしておくか、
-  少なくとも fork からの PR のワークフロー実行に承認を必須にする。
-- [ ] **Settings → Rules → Rulesets**(任意): `main` への force push と削除を禁止する。
+- [x] **Projects を無効化**(使っていないため)。Issues は受け付ける方針で有効のまま。
+  ```powershell
+  gh repo edit --enable-projects=false
+  ```
+- [x] **Actions を無効化**(ワークフローが無いため。fork からの PR でワークフローが動く経路も塞がる)。
+  使い始めるときは `-F enabled=true` で戻す。
+  ```powershell
+  gh api -X PUT repos/filderschoice/windows-devenv-setup/actions/permissions -F enabled=false
+  ```
+
+### 3.2 公開直後に設定する(private のままでは設定できない)
+
+GitHub Free プランでは、以下は private リポジトリで使えない(2026-10-23 に実行して確認済み:
+Secret scanning は `HTTP 422 Secret scanning is not available for this repository`、非公開の脆弱性報告は
+`HTTP 404`、Ruleset は `HTTP 403 Upgrade to GitHub Pro or make this repository public`)。
+**4 で公開を切り替えたら、すぐに**次を実行する。
+
+```powershell
+$repo = 'filderschoice/windows-devenv-setup'
+
+# Secret scanning と Push protection(誤ってトークンを push するのを防ぐ)
+'{"security_and_analysis":{"secret_scanning":{"status":"enabled"},"secret_scanning_push_protection":{"status":"enabled"}}}' |
+    gh api -X PATCH "repos/$repo" --input -
+
+# Private vulnerability reporting(SECURITY.md が案内する報告窓口。無効のままだと報告できない)
+gh api -X PUT "repos/$repo/private-vulnerability-reporting"
+
+# Ruleset: main(既定ブランチ)への force push と削除を禁止する
+'{"name":"protect-main","target":"branch","enforcement":"active","conditions":{"ref_name":{"include":["~DEFAULT_BRANCH"],"exclude":[]}},"rules":[{"type":"non_fast_forward"},{"type":"deletion"}]}' |
+    gh api -X POST "repos/$repo/rulesets" --input -
+```
+
+確認:
+
+```powershell
+gh api "repos/$repo" --jq .security_and_analysis
+gh api "repos/$repo/private-vulnerability-reporting"   # {"enabled":true}
+gh api "repos/$repo/rulesets" --jq '.[].name'          # protect-main
+```
 
 ## 4. 公開の切り替え
 
@@ -80,11 +111,13 @@
    ```powershell
    gh repo edit --visibility public --accept-visibility-change-consequences
    ```
+4. 続けて 3.2 の設定を実行する。
 
 ## 5. 公開後の確認
 
 - [ ] ログアウト状態(またはシークレットウィンドウ)で README・LICENSE が表示されることを確認する。
 - [ ] **Insights → Community Standards** で README / LICENSE / Security policy が認識されていることを確認する。
+- [ ] 3.2 の確認コマンドで、Secret scanning・非公開の脆弱性報告・Ruleset が有効になっていることを確認する。
 - [ ] **Security** タブで Secret scanning のアラートが出ていないことを確認する。
 - [ ] README の `git clone` 手順どおりに取得できることを確認する(スクリプトは実行しなくてよい)。
 
