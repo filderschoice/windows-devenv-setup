@@ -79,6 +79,67 @@ function Test-WingetPackageInstalled {
     return $LASTEXITCODE -eq 0
 }
 
+function Get-BlockingProcess {
+    # インストーラ(Inno Setup 等)が「使用中のプロセスがある」として中断した場合、そのプロセス名と PID が
+    # winget のインストーラログに残る(例: Git for Windows の keyboxd.exe)。直前の実行で書かれた
+    # ログだけを対象に、まだ生きているプロセスを返す。PID は再利用されうるので名前も照合する。
+    param([string]$PackageId, [datetime]$Since)
+    $logDir = Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\LocalState\DiagOutputDir'
+    $log = Get-ChildItem -Path $logDir -Filter "$PackageId.*.log" -ErrorAction SilentlyContinue |
+        Where-Object { $_.LastWriteTime -ge $Since } |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+    if (-not $log) { return @() }
+
+    $found = @()
+    $text = Get-Content -LiteralPath $log.FullName -Raw -ErrorAction SilentlyContinue
+    foreach ($m in [regex]::Matches($text, '(?m)^\s*(\S+)\.exe \(PID (\d+)\)')) {
+        $proc = Get-Process -Id ([int]$m.Groups[2].Value) -ErrorAction SilentlyContinue
+        if ($proc -and $proc.ProcessName -eq $m.Groups[1].Value) {
+            $found += $proc
+        }
+    }
+    return $found
+}
+
+function Invoke-WingetWithRetry {
+    # winget を実行して終了コードを返す。インストーラが「使用中のプロセス」で失敗した場合に限り、
+    # 対象プロセスを示してユーザーに確認し、同意があれば停止して1回だけ再実行する。
+    # 同意がない・対話できない場合は何も止めず、元の終了コードをそのまま返す。
+    param([string[]]$WingetArgs, [string]$PackageId, [string]$PackageName)
+    $startedAt = Get-Date
+    winget @WingetArgs | Out-Host
+    $code = $LASTEXITCODE
+    if ($code -eq 0 -or $code -eq $script:WINGET_NO_APPLICABLE_UPDATE) { return $code }
+
+    $blockers = @(Get-BlockingProcess -PackageId $PackageId -Since $startedAt)
+    if ($blockers.Count -eq 0) { return $code }
+
+    Write-Warning "$PackageName のインストーラが、使用中の次のプロセスを理由に中断しました:"
+    foreach ($p in $blockers) { Write-Host "    $($p.ProcessName).exe (PID $($p.Id))" }
+    try {
+        $answer = Read-Host "これらを停止して再試行しますか? (停止中の処理は失われます) [y/N]"
+    } catch {
+        $answer = ''
+    }
+    if ($answer -notmatch '^[yY]') {
+        Write-Host "[Skip] プロセスは停止せず、再試行しません"
+        return $code
+    }
+
+    foreach ($p in $blockers) {
+        try {
+            Stop-Process -Id $p.Id -Force -ErrorAction Stop
+        } catch {
+            Write-Warning "$($p.ProcessName).exe (PID $($p.Id)) を停止できませんでした: $($_.Exception.Message)"
+        }
+    }
+    Start-Sleep -Seconds 1
+    Write-Host "[Retry] $PackageName を再試行しています..."
+    winget @WingetArgs | Out-Host
+    return $LASTEXITCODE
+}
+
 function Resolve-AppPath {
     # winget/MSIインストーラがPATHを更新しない場合でも、App Pathsレジストリに
     # 実行ファイルの場所が登録されていることが多い(例: PowerShell 7の pwsh.exe)。
@@ -187,29 +248,29 @@ foreach ($pkg in $packages) {
 
     if (Test-WingetPackageInstalled -Id $pkg.Id) {
         Write-Host "[Check] $($pkg.Name) は導入済みです。最新版か確認しています..."
-        winget upgrade --id $pkg.Id -e --accept-package-agreements --accept-source-agreements --silent
-        if ($LASTEXITCODE -eq 0) {
+        $exitCode = Invoke-WingetWithRetry -PackageId $pkg.Id -PackageName $pkg.Name -WingetArgs @('upgrade', '--id', $pkg.Id, '-e', '--accept-package-agreements', '--accept-source-agreements', '--silent')
+        if ($exitCode -eq 0) {
             Write-Host "[OK] $($pkg.Name) を最新版に更新しました"
             $results += [PSCustomObject]@{ Name = $pkg.Name; Status = 'Updated' }
             $stepSucceeded = $true
-        } elseif ($LASTEXITCODE -eq $script:WINGET_NO_APPLICABLE_UPDATE) {
+        } elseif ($exitCode -eq $script:WINGET_NO_APPLICABLE_UPDATE) {
             Write-Host "[Skip] $($pkg.Name) は既に最新版です"
             $results += [PSCustomObject]@{ Name = $pkg.Name; Status = 'Skip (最新版)' }
             $stepSucceeded = $true
         } else {
-            Write-Warning "[NG] $($pkg.Name) の更新確認に失敗しました (exit code: $LASTEXITCODE)"
-            $results += [PSCustomObject]@{ Name = $pkg.Name; Status = "Failed to update (exit code: $LASTEXITCODE)" }
+            Write-Warning "[NG] $($pkg.Name) の更新確認に失敗しました (exit code: $exitCode)"
+            $results += [PSCustomObject]@{ Name = $pkg.Name; Status = "Failed to update (exit code: $exitCode)" }
         }
     } else {
         Write-Host "[Install] $($pkg.Name) をインストールしています..."
-        winget install --id $pkg.Id -e --accept-package-agreements --accept-source-agreements --silent
-        if ($LASTEXITCODE -eq 0) {
+        $exitCode = Invoke-WingetWithRetry -PackageId $pkg.Id -PackageName $pkg.Name -WingetArgs @('install', '--id', $pkg.Id, '-e', '--accept-package-agreements', '--accept-source-agreements', '--silent')
+        if ($exitCode -eq 0) {
             Write-Host "[OK] $($pkg.Name) のインストールが完了しました"
             $results += [PSCustomObject]@{ Name = $pkg.Name; Status = 'Installed' }
             $stepSucceeded = $true
         } else {
-            Write-Warning "[NG] $($pkg.Name) のインストールに失敗しました (exit code: $LASTEXITCODE)"
-            $results += [PSCustomObject]@{ Name = $pkg.Name; Status = "Failed (exit code: $LASTEXITCODE)" }
+            Write-Warning "[NG] $($pkg.Name) のインストールに失敗しました (exit code: $exitCode)"
+            $results += [PSCustomObject]@{ Name = $pkg.Name; Status = "Failed (exit code: $exitCode)" }
         }
     }
 

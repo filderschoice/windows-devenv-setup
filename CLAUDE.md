@@ -145,6 +145,10 @@ winget show --id <PackageIdentifier> -e
   それを書き戻すと参照が実パスで焼き付いてしまうため、この API を PATH の読み書きに使ってはならない
   (このリポジトリは NVM for Windows を導入するので実害が出る)。レジストリ直書きでは `WM_SETTINGCHANGE` が
   飛ばないので、`Publish-EnvironmentChange` で明示的に通知する。
+- winget の実行は `Invoke-WingetWithRetry` を経由する。インストーラが使用中プロセスで中断した場合
+  (winget のインストーラログ `DiagOutputDir\<Id>.*.log` に `name.exe (PID n)` が残る)に限り、
+  `Get-BlockingProcess` で特定したプロセスを**ユーザーへ確認したうえで**停止し、1回だけ再試行する。
+  確認なしにプロセスを止めてはならない。新しい winget 呼び出しを足す場合もこの関数を使う。
 - コンソール出力・コメントは日本語で書かれている。この2つのスクリプトを編集する際はそれに合わせる。
 - 文字コード: 改行は LF、**両スクリプトとも UTF-8 BOM付きで保存する**。READMEが案内する
   `powershell -ExecutionPolicy Bypass -File ...` の `powershell` は Windows PowerShell 5.1 であり、
