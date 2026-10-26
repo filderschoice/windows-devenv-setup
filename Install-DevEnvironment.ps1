@@ -79,6 +79,23 @@ function Test-WingetPackageInstalled {
     return $LASTEXITCODE -eq 0
 }
 
+function Get-WingetPackageVersion {
+    # `winget list --id <id> -e` の表から、ID 列の直後にあるバージョン列を取り出す。
+    # 列幅や見出しはロケールで変わるため、見出しではなく「ID と一致するトークンの次」で拾う。
+    # 未導入・取得失敗時は $null。
+    param([string]$Id)
+    $lines = winget list --id $Id -e --accept-source-agreements 2>$null
+    if ($LASTEXITCODE -ne 0) { return $null }
+    foreach ($line in $lines) {
+        $tokens = @("$line".Trim() -split '\s+')
+        $i = [array]::IndexOf($tokens, $Id)
+        if ($i -ge 0 -and $i + 1 -lt $tokens.Count) {
+            return $tokens[$i + 1]
+        }
+    }
+    return $null
+}
+
 function Get-BlockingProcess {
     # インストーラ(Inno Setup 等)が「使用中のプロセスがある」として中断した場合、そのプロセス名と PID が
     # winget のインストーラログに残る(例: Git for Windows の keyboxd.exe)。直前の実行で書かれた
@@ -102,14 +119,28 @@ function Get-BlockingProcess {
     return $found
 }
 
+function Invoke-Winget {
+    # winget を実行して終了コードを返す。出力は Out-Host でそのまま表示する。
+    # winget は UTF-8 で出力するが、パイプ経由だと [Console]::OutputEncoding(日本語環境では
+    # cp932)で解釈されて文字化けするため、実行中だけ UTF-8 に切り替えて元に戻す。
+    param([string[]]$WingetArgs)
+    $prevEncoding = [Console]::OutputEncoding
+    try {
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        winget @WingetArgs | Out-Host
+        return $LASTEXITCODE
+    } finally {
+        [Console]::OutputEncoding = $prevEncoding
+    }
+}
+
 function Invoke-WingetWithRetry {
     # winget を実行して終了コードを返す。インストーラが「使用中のプロセス」で失敗した場合に限り、
     # 対象プロセスを示してユーザーに確認し、同意があれば停止して1回だけ再実行する。
     # 同意がない・対話できない場合は何も止めず、元の終了コードをそのまま返す。
     param([string[]]$WingetArgs, [string]$PackageId, [string]$PackageName)
     $startedAt = Get-Date
-    winget @WingetArgs | Out-Host
-    $code = $LASTEXITCODE
+    $code = Invoke-Winget -WingetArgs $WingetArgs
     if ($code -eq 0 -or $code -eq $script:WINGET_NO_APPLICABLE_UPDATE) { return $code }
 
     $blockers = @(Get-BlockingProcess -PackageId $PackageId -Since $startedAt)
@@ -136,8 +167,7 @@ function Invoke-WingetWithRetry {
     }
     Start-Sleep -Seconds 1
     Write-Host "[Retry] $PackageName を再試行しています..."
-    winget @WingetArgs | Out-Host
-    return $LASTEXITCODE
+    return (Invoke-Winget -WingetArgs $WingetArgs)
 }
 
 function Resolve-AppPath {
@@ -326,8 +356,17 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
     }
 }
 
+Write-Host "`nインストール済みバージョンを取得しています..."
+$versions = @{}
+foreach ($pkg in $packages) {
+    $versions[$pkg.Name] = Get-WingetPackageVersion -Id $pkg.Id
+}
+$versions['Claude Code CLI'] = Get-ClaudeVersion
+
 Write-Host "`n=== インストール結果サマリ ==="
-$results | Format-Table -AutoSize
+$results |
+    Select-Object Name, Status, @{ Name = 'Version'; Expression = { if ($versions[$_.Name]) { $versions[$_.Name] } else { '-' } } } |
+    Format-Table -AutoSize
 
 # 個々の失敗ではループを止めない代わりに、最後にまとめて終了コードへ反映する
 # (呼び出し側や自動実行から成否を判定できるようにするため)。
